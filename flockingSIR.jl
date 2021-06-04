@@ -1,7 +1,7 @@
 module FlockingSIR
 
 export FlockingSIRGroup, update, polarization, save_group_to_files, save_simulation,
-        load_acng_from_files, initialize_acng_random
+        load_fsg_from_files
 
 # using link-list Cell Molecular Dynamics, refer to http://cacs.usc.edu/education/cs596/01-1LinkedListCell.pdf
 # https://journals.aps.org/pre/pdf/10.1103/PhysRevE.84.040301
@@ -163,53 +163,53 @@ function update_angle(angl::AbstractArray{T,1},Angle_difference::AbstractArray{T
 end
 
 
-function update(acng::FlockingSIRGroup{T},timestep::Real) where T <: Real
-    noise_n = acng.noise/sqrt(timestep)
-    Movement = vectorize.(acng.angle) .* acng.speed
-    Angle_difference = zeros(T,acng.particles)
-    box,cell,head,lscl = linked_list_cell(acng.location,acng.particles,acng.radius,acng.extent)
-    infected_new = convert.(Int,acng.infected)
-    nneigh = ones(Int,acng.particles)
-    infecting_rate = acng.infecting_rate*timestep
-    for i = 1:acng.particles
-        update_movement_and_turning_i(i,Movement, Angle_difference,acng.location[i],acng.location, acng.angle[i],acng.angle,acng.infected,infected_new,acng.recovered,nneigh,infecting_rate,box,cell,head,lscl,acng.radius,acng.mu,acng.k,acng.extent)
+function update(fsg::FlockingSIRGroup{T},timestep::Real) where T <: Real
+    noise_n = fsg.noise/sqrt(timestep)
+    Movement = vectorize.(fsg.angle) .* fsg.speed
+    Angle_difference = zeros(T,fsg.particles)
+    box,cell,head,lscl = linked_list_cell(fsg.location,fsg.particles,fsg.radius,fsg.extent)
+    infected_new = convert.(Int,fsg.infected)
+    nneigh = ones(Int,fsg.particles)
+    infecting_rate = fsg.infecting_rate*timestep
+    for i = 1:fsg.particles
+        update_movement_and_turning_i(i,Movement, Angle_difference,fsg.location[i],fsg.location, fsg.angle[i],fsg.angle,fsg.infected,infected_new,fsg.recovered,nneigh,infecting_rate,box,cell,head,lscl,fsg.radius,fsg.mu,fsg.k,fsg.extent)
     end
-    update_location(acng.location,Movement,acng.particles,timestep)
-    update_angle(acng.angle,Angle_difference,nneigh,noise_n,acng.particles,acng.tau,timestep)
-    acng.infected .= sign.(infected_new)
-    recovering!(acng.infected,acng.recovered,acng.recovering_rate*timestep)
-    mod2pi!(acng.angle)
-    modC_limited!(acng.location,acng.extent)
+    update_location(fsg.location,Movement,fsg.particles,timestep)
+    update_angle(fsg.angle,Angle_difference,nneigh,noise_n,fsg.particles,fsg.tau,timestep)
+    fsg.infected .= sign.(infected_new)
+    recovering!(fsg.infected,fsg.recovered,fsg.recovering_rate*timestep)
+    mod2pi!(fsg.angle)
+    modC_limited!(fsg.location,fsg.extent)
 end
 
 
 
-function save_simulation(acng::FlockingSIRGroup,frames::Int,skip::Int,timestep::Real,savepath::String;T::DataType=Float32, datatype="HDF5")
+function save_simulation(fsg::FlockingSIRGroup,frames::Int,skip::Int,timestep::Real,savepath::String;T::DataType=Float32, datatype="HDF5")
 
     @assert datatype in ["HDF5","NPY","CSV"]
     if !ispath(savepath)
         mkpath(savepath)
     end
-    History_location = Array{Complex{T},2}(undef,frames,acng.particles)
-    History_angle = Array{T,2}(undef,frames,acng.particles)
-    History_infected = Array{Int16,2}(undef,frames,acng.particles)
-    History_recovered = Array{Int16,2}(undef,frames,acng.particles)
-    History_location[1,:] .= acng.location
-    History_angle[1,:] .= acng.angle
-    History_infected[1,:] = acng.infected
-    History_recovered[1,:] = acng.recovered
+    History_location = Array{Complex{T},2}(undef,frames,fsg.particles)
+    History_angle = Array{T,2}(undef,frames,fsg.particles)
+    History_infected = Array{Int16,2}(undef,frames,fsg.particles)
+    History_recovered = Array{Int16,2}(undef,frames,fsg.particles)
+    History_location[1,:] .= fsg.location
+    History_angle[1,:] .= fsg.angle
+    History_infected[1,:] = fsg.infected
+    History_recovered[1,:] = fsg.recovered
     actual_frames = frames
     for t in 2:frames
         for i in 1:skip
             if i == skip
-                History_location[t,:] = acng.location
-                History_angle[t,:] = acng.angle
-                History_infected[t,:] = acng.infected
-                History_recovered[t,:] = acng.recovered
+                History_location[t,:] = fsg.location
+                History_angle[t,:] = fsg.angle
+                History_infected[t,:] = fsg.infected
+                History_recovered[t,:] = fsg.recovered
             end
-            update(acng,timestep)
+            update(fsg,timestep)
         end
-        if sum(acng.infected) == 0
+        if sum(fsg.infected) == 0
             actual_frames = t
             break
         end
@@ -257,13 +257,8 @@ function save_simulation(acng::FlockingSIRGroup,frames::Int,skip::Int,timestep::
     end
 end
 
-function load_acng_from_files(loadpath)
+function load_fsg_from_files(loadpath)
     load_group_from_files(FlockingSIRGroup,loadpath)
-end
-
-function initialize_acng_random(particles::Int,extent::Real,radius::Real,speed::Real,mu::Real,tau::Real,noise::Real,k::Real)
-    group = FlockingSIRGroup(extent,particles,radius,speed,mu,tau,k,noise,rand(particles)*2pi,complex.(rand(particles)*extent,rand(particles)*extent))
-    return group
 end
 
 end
